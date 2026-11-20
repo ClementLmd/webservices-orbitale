@@ -1,6 +1,4 @@
 # Contrat OpenAPI de l'API Orbitale (S2).
-# Partie guidée : événements, erreurs communes, lecture d'un billet.
-# Partie autonome encore à faire : commandes, règle maison, mock Prism.
 openapi: 3.1.0
 info:
   title: API Orbitale
@@ -20,6 +18,10 @@ tags:
     description: Catalogue des événements
   - name: Billets
     description: Billets délivrés après une commande
+  - name: Commandes
+    description: Achats de billets
+  - name: Scans
+    description: Contrôles d'entrée aux bornes
 
 paths:
   /v1/events:
@@ -178,7 +180,192 @@ paths:
                 usedAt: null
         "404": { $ref: "#/components/responses/NotFound" }
 
-  # TODO partie autonome : /v1/orders, /v1/orders/{orderId}, /v1/orders/{orderId}/tickets
+  /v1/orders:
+    post:
+      tags: [Commandes]
+      operationId: createOrder
+      summary: Créer une commande
+      description: Répond 409 si l'événement n'a plus assez de places.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderCreate" }
+            example:
+              eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+              quantity: 2
+              buyerEmail: ada@example.com
+      responses:
+        "201":
+          description: Commande créée
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+              example:
+                id: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                quantity: 2
+                buyerEmail: ada@example.com
+                status: paid
+                total: 7800
+                tickets:
+                  - id: 8c2a1d4e-1b7f-4c3a-9e20-5a6b7c8d9e0f
+                    orderId: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                    eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                    code: ORB-A1B2C3D4E5F6
+                    status: valid
+                    usedAt: null
+                  - id: 9d3b2e5f-2c80-4d4b-af31-6b7c8d9e0f1a
+                    orderId: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                    eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                    code: ORB-B2C3D4E5F6A1
+                    status: valid
+                    usedAt: null
+                createdAt: "2026-11-20T10:05:00.000Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /v1/orders/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    get:
+      tags: [Commandes]
+      operationId: getOrder
+      summary: Lire une commande
+      responses:
+        "200":
+          description: La commande demandée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+              example:
+                id: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                quantity: 2
+                buyerEmail: ada@example.com
+                status: paid
+                total: 7800
+                tickets:
+                  - id: 8c2a1d4e-1b7f-4c3a-9e20-5a6b7c8d9e0f
+                    orderId: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                    eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                    code: ORB-A1B2C3D4E5F6
+                    status: valid
+                    usedAt: null
+                  - id: 9d3b2e5f-2c80-4d4b-af31-6b7c8d9e0f1a
+                    orderId: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                    eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                    code: ORB-B2C3D4E5F6A1
+                    status: valid
+                    usedAt: null
+                createdAt: "2026-11-20T10:05:00.000Z"
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Commandes]
+      operationId: patchOrder
+      summary: Modifier une commande
+      description: Annuler, c'est envoyer {"status":"cancelled"}. Répond 409 si un billet a déjà été scanné.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderPatch" }
+            example:
+              status: cancelled
+      responses:
+        "200":
+          description: La commande modifiée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /v1/orders/{orderId}/tickets:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    get:
+      tags: [Billets]
+      operationId: listOrderTickets
+      summary: Lister les billets d'une commande
+      responses:
+        "200":
+          description: Les billets de la commande
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketList" }
+              example:
+                data:
+                  - id: 8c2a1d4e-1b7f-4c3a-9e20-5a6b7c8d9e0f
+                    orderId: 3a9e1c2b-7d4f-4a8e-b1c0-2d3e4f5a6b7c
+                    eventId: 6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
+                    code: ORB-A1B2C3D4E5F6
+                    status: valid
+                    usedAt: null
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/scans:
+    get:
+      tags: [Scans]
+      operationId: listScans
+      summary: Lister les contrôles d'un événement
+      parameters:
+        - name: eventId
+          in: query
+          required: false
+          description: Limiter aux entrées de cet événement
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Les scans
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanList" }
+              example:
+                data:
+                  - id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                    ticketId: 8c2a1d4e-1b7f-4c3a-9e20-5a6b7c8d9e0f
+                    gateId: porte-a
+                    scannedAt: "2027-03-19T20:05:00.000Z"
+                    result: accepted
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Scans]
+      operationId: createScan
+      summary: Contrôler un billet à une borne
+      description: Répond 409 si ce billet a déjà un scan accepté.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScanCreate" }
+            example:
+              code: ORB-A1B2C3D4E5F6
+              gateId: porte-a
+      responses:
+        "201":
+          description: Scan enregistré
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Scan" }
+              example:
+                id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                ticketId: 8c2a1d4e-1b7f-4c3a-9e20-5a6b7c8d9e0f
+                gateId: porte-a
+                scannedAt: "2027-03-19T20:05:00.000Z"
+                result: accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
 
 components:
   parameters:
@@ -189,6 +376,11 @@ components:
       schema: { type: string, format: uuid }
     TicketId:
       name: ticketId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OrderId:
+      name: orderId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -204,6 +396,15 @@ components:
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/ValidationProblem" }
+          example:
+            type: "https://api.orbitale.test/problems/validation"
+            title: Requête invalide
+            status: 422
+            detail: Le corps de la requête ne respecte pas le contrat
+            instance: /v1/events
+            errors:
+              - field: title
+                message: Doit contenir au moins 3 caractères
     Conflict:
       description: Conflit avec l'état de la ressource
       content:
@@ -219,6 +420,7 @@ components:
     Location:
       description: URI de la ressource créée
       schema: { type: string }
+      example: /v1/events/6f1c2b8e-4f3a-4e8b-9a51-2d7c0f9e1a23
 
   schemas:
     Problem:
@@ -349,4 +551,74 @@ components:
           type: [string, "null"]
           format: date-time
 
-    # TODO partie autonome : OrderCreate, Order
+    TicketList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Ticket" }
+
+    OrderCreate:
+      type: object
+      additionalProperties: false
+      required: [eventId, quantity, buyerEmail]
+      properties:
+        eventId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 10 }
+        buyerEmail: { type: string, format: email }
+
+    Order:
+      type: object
+      required: [id, eventId, quantity, buyerEmail, status, total, tickets, createdAt]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        eventId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 10 }
+        buyerEmail: { type: string, format: email }
+        status: { type: string, enum: [pending, paid, cancelled] }
+        total:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Total en centimes
+        tickets:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/Ticket" }
+        createdAt: { type: string, format: date-time, readOnly: true }
+
+    OrderPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        status: { type: string, enum: [cancelled] }
+
+    ScanCreate:
+      type: object
+      additionalProperties: false
+      required: [code, gateId]
+      properties:
+        code:
+          type: string
+          pattern: "^ORB-[0-9A-F]{12}$"
+        gateId: { type: string, minLength: 1, maxLength: 40 }
+
+    Scan:
+      type: object
+      required: [id, ticketId, gateId, scannedAt, result]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        ticketId: { type: string, format: uuid, readOnly: true }
+        gateId: { type: string, minLength: 1, maxLength: 40 }
+        scannedAt: { type: string, format: date-time, readOnly: true }
+        result: { type: string, enum: [accepted, rejected] }
+
+    ScanList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Scan" }

@@ -28,8 +28,15 @@ rules:
               type: object
               required: ["application/problem+json"]
 
-  # TODO (TP autonome) : règle maison « orbitale-pas-de-verbe »
-  # Un chemin ne doit contenir aucun verbe (/createEvent, /getOrders...).
-  # Indices : given: $.paths   field: "@key"   function: pattern   functionOptions: { notMatch: "..." }
+  orbitale-pas-de-verbe:
+    description: Un chemin ne doit contenir aucun verbe
+    message: "{{path}} contient un verbe (create, get, update, delete)."
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        notMatch: "/(create|get|update|delete)"
 
   operation-description: off
